@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kano Health Map</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.0/leaflet.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="source/jquery-ui.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="plugins/sidebar/L.Control.Sidebar.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="https://ppete2.github.io/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.css" />
+    <link rel="stylesheet" href="plugins/mouseposition/L.Control.MousePosition.css">
+    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css"/>
+    <link rel="stylesheet" href="plugins/minimap/Control.MiniMap.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.0/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.js"></script>
+    <script src="source/jquery-ui.min.js"></script>
+    <script src="plugins/sidebar/L.Control.Sidebar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.js"></script>
+    <script src="https://ppete2.github.io/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.js"></script>
+    <script src="plugins/mouseposition/L.Control.MousePosition.js"></script>
+    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.js"></script>
+    <script src="plugins/minimap/Control.MiniMap.min.js"></script>
+    <script src="plugins/ajax/leaflet.ajax.js"></script>
+
+    <style>
+        #mapdiv {
+            height: 100vh;
+        }
+        .info {
+            padding: 6px 8px;
+            background: white;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+        }
+        .info h4 {
+            margin: 0 0 5px;
+            color: #777;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div id="mapdiv"></div>
+
+    <script>
+        var map = L.map('mapdiv').setView([12.0022, 8.5919], 10); // Center on Kano
+
+        // Add base map layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Function to style wards
+        function styleWards(feature) {
+            return {
+                fillColor: getWardColor(feature.properties.NUMPOINTS || 0),
+                weight: 2,
+                opacity: 1,
+                color: 'white',
+                dashArray: '3',
+                fillOpacity: 0.5
+            };
+        }
+
+        // Function to get ward color based on the number of facilities
+        function getWardColor(facilities) {
+            return facilities > 70 ? '#800026' :
+                   facilities > 50 ? '#BD0026' :
+                   facilities > 30 ? '#E31A1C' :
+                   facilities > 10 ? '#FC4E2A' :
+                   facilities > 0  ? '#FD8D3C' :
+                                     '#FFEDA0';
+        }
+
+        // Function to style facility points
+        function styleFacility(feature, latlng) {
+            const levelColors = {
+                'Primary': '#1f78b4',
+                'Secondary': '#33a02c',
+                'Tertiary': '#e31a1c'
+            };
+
+            const level = feature.properties.Level || 'Unknown';
+            const color = levelColors[level] || '#636363'; // Default to gray if level is unknown
+
+            return L.circleMarker(latlng, {
+                radius: 6,
+                fillColor: color,
+                color: '#000',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).bindPopup(
+                `<strong>Name:</strong> ${feature.properties.Name || 'N/A'}<br>` +
+                `<strong>Type:</strong> ${feature.properties.Facility_type || 'N/A'}<br>` +
+                `<strong>Level:</strong> ${level}`
+            );
+        }
+
+        // Load merged GeoJSON data
+        L.geoJson.ajax('data/kano_ward_health_facilities.geojson', {
+            style: function (feature) {
+                return feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon'
+                    ? styleWards(feature)
+                    : null; // Skip styling non-polygon features
+            },
+            pointToLayer: function (feature, latlng) {
+                return feature.geometry.type === 'Point'
+                    ? styleFacility(feature, latlng)
+                    : null; // Skip non-point features
+            },
+            onEachFeature: function (feature, layer) {
+                if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
+                    layer.on({
+                        mouseover: function (e) {
+                            const layer = e.target;
+                            layer.setStyle({
+                                weight: 5,
+                                color: '#666',
+                                fillOpacity: 0.7
+                            });
+                        },
+                        mouseout: function (e) {
+                            geojson.resetStyle(e.target);
+                        },
+                        click: function (e) {
+                            map.fitBounds(e.target.getBounds());
+                        }
+                    });
+                }
+            }
+        }).addTo(map);
+
+        // Add legend
+        var legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'info legend');
+            var grades = [0, 10, 30, 50, 70];
+            var labels = [];
+
+            div.innerHTML = "<h4>Facilities per Ward</h4>";
+            for (var i = 0; i < grades.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getWardColor(grades[i] + 1) + '"></i> ' +
+                    grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+            }
+            return div;
+        };
+        legend.addTo(map);
+    </script>
+</body>
+</html>
