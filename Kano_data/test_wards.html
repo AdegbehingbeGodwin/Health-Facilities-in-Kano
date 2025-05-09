@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEST - Kano Wards</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.0/leaflet.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.0/leaflet.js"></script>
+    <script src="plugins/ajax/leaflet.ajax.js"></script> <!-- Make sure this path is correct -->
+    <style>
+        #mapdiv { height: 600px; width: 100%; }
+    </style>
+</head>
+<body>
+    <div id="mapdiv"></div>
+
+    <script>
+        var mymap = L.map('mapdiv').setView([12.0022, 8.5919], 9); 
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(mymap);
+
+        console.log("Map initialized.");
+
+        function simpleWardStyle(feature) {
+            console.log("Applying simple style to feature with properties:", feature.properties);
+            return {
+                fillColor: 'green', 
+                weight: 3,          
+                opacity: 1,
+                color: 'orange',    
+                fillOpacity: 0.5
+            };
+        }
+
+        var kanoWardsLayer = L.geoJson.ajax('data/kano_wards_with_numpoints.geojson', {
+            style: simpleWardStyle, 
+            onEachFeature: function(feature, layer) {
+                // This console.log will ONLY run if Leaflet successfully creates a layer for a feature
+                console.log("onEachFeature CALLED for feature with properties:", feature.properties);
+                if (feature.properties) {
+                    let popupContent = "Ward: ";
+                    if (feature.properties.wardname) {
+                        popupContent += feature.properties.wardname;
+                    } else if (feature.properties.ward) {
+                        popupContent += feature.properties.ward;
+                    } else if (feature.properties.FID) {
+                        popupContent += "FID " + feature.properties.FID;
+                    } else {
+                        popupContent += "Unknown";
+                    }
+                    if (feature.properties.NUMPOINTS !== undefined) {
+                        popupContent += "<br>NUMPOINTS: " + feature.properties.NUMPOINTS;
+                    }
+                    layer.bindPopup(popupContent);
+                }
+            }
+        })
+        .on('data:loaded', function(event) { // Added 'event' argument
+            console.log("SUCCESS: kano_wards_with_numpoints.geojson data loaded!");
+            
+            // Let's inspect the raw data that was loaded by leaflet.ajax
+            var rawGeoJsonData = event.target.toGeoJSON(); // Or event.target.options.data if that's how leaflet.ajax stores it
+                                                          // For the plugin version you're using, .toGeoJSON() on the layer group should work.
+            console.log("Raw GeoJSON data object from layer:", rawGeoJsonData);
+
+            if (rawGeoJsonData && rawGeoJsonData.features) {
+                console.log("Number of features in raw data:", rawGeoJsonData.features.length);
+                if (rawGeoJsonData.features.length > 0) {
+                    console.log("First feature from raw data:", JSON.stringify(rawGeoJsonData.features[0], null, 2)); // Pretty print first feature
+                }
+            } else {
+                console.log("Raw GeoJSON data structure seems unexpected or has no features array.");
+            }
+
+
+            // Now check the Leaflet layer group
+            console.log("Number of Leaflet layers created:", kanoWardsLayer.getLayers().length);
+
+            if (kanoWardsLayer.getLayers().length > 0) {
+                mymap.fitBounds(kanoWardsLayer.getBounds());
+                console.log("Map fitted to bounds of loaded wards.");
+            } else {
+                console.error("ERROR: GeoJSON data loaded, but NO Leaflet layers were created from its features. This usually means features lack valid geometry or the GeoJSON structure is problematic for Leaflet's L.geoJson processing, even if leaflet.ajax parsed it.");
+            }
+        })
+        .on('data:progress', function(e) {
+            console.log("Loading progress:", e.progress, "%");
+        })
+        .on('data:error', function(e) {
+            console.error("ERROR loading or parsing kano_wards_with_numpoints.geojson:", e);
+            if (e && e.error && e.error.statusText) {
+                console.error("Status Text:", e.error.statusText);
+            }
+        })
+        .addTo(mymap);
+
+        console.log("Attempting to load GeoJSON...");
+
+    </script>
+</body>
+</html>

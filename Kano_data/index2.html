@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Facilities in Kano</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.0/leaflet.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="source/jquery-ui.min.css">
+    <link rel="stylesheet" href="style.css"> <!-- Assuming you have this file -->
+    <link rel="stylesheet" href="plugins/sidebar/L.Control.Sidebar.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://ppete2.github.io/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.css" />
+    <link rel="stylesheet" href="plugins/mouseposition/L.Control.MousePosition.css">
+    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css"/>
+    <link rel="stylesheet" href="plugins/minimap/Control.MiniMap.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.0/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.js"></script>
+    <script src="source/jquery-ui.min.js"></script>
+    <script src="plugins/sidebar/L.Control.Sidebar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.js"></script>
+    <script src="https://ppete2.github.io/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.js"></script>
+    <script src="plugins/mouseposition/L.Control.MousePosition.js"></script>
+    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.js"></script>
+    <script src="plugins/minimap/Control.MiniMap.min.js"></script>
+    <script src="plugins/ajax/leaflet.ajax.js"></script>
+
+    <style>
+        #mapdiv {
+            height: calc(100vh - 50px); /* Example: Adjust if you have a header */
+            width: 100%;
+        }
+        body { margin: 0; padding: 0; }
+        .container-fluid, .row { height: 100%; } /* Ensure row and container take height */
+        .col-md-12 { height: 100%; padding: 0; } /* Ensure map column takes height */
+
+	    .info {
+	        padding: 6px 8px;
+	        font: 14px/16px Arial, Helvetica, sans-serif;
+	        background: white;
+	        background: rgba(255,255,255,0.8);
+	        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+	        border-radius: 5px;
+            max-width: 300px; /* Prevent info box from getting too wide */
+		}
+		.info h4 {
+		    margin: 0 0 5px;
+		    color: #777;
+		}
+
+		.legend {
+		    line-height: 18px;
+		    color: #555;
+		}
+		.legend i {
+		    width: 18px;
+		    height: 18px;
+		    float: left;
+		    margin-right: 8px;
+		    opacity: 0.9; /* Slightly less transparent for better visibility */
+            border: 1px solid #777; /* Add a border to swatches */
+		}
+    </style>
+</head>
+<body>
+    <!-- Removed Bootstrap container for simplicity to ensure map takes full height initially
+         You can add back Bootstrap structure if needed for surrounding elements,
+         but make sure #mapdiv and its parents have defined heights.
+    -->
+    <div id="mapdiv"></div>
+
+    <script>
+    	var baseLayers;
+		var overlays = {}; 
+		var geojsonKanoWards; 
+
+        var mymap = L.map('mapdiv', {
+            center: [12.0022, 8.5919],
+            zoom: 10, // Slightly more zoomed out to see context
+            attributionControl: false,
+            zoomControl: true // Added zoom control for usability
+        });
+        
+        var GoogleStreets = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{
+			maxZoom:23,
+			subdomains:['mt0','mt1','mt2','mt3'],
+            attribution: 'Map data © Google'
+		});
+		GoogleStreets.addTo(mymap); 
+
+        var OpenStreetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        });
+        
+		baseLayers = {
+	    "Google Streets": GoogleStreets,
+	    "Open Street Map": OpenStreetMap
+		};
+
+		var control_Layers = L.control.layers(baseLayers, overlays).addTo(mymap);
+
+		// --- KANO WARDS ---
+		geojsonKanoWards = L.geoJson.ajax('data/kano_wards_with_numpoints.geojson', { 
+		    style: styleWards, 
+		    onEachFeature: onEachFeatureWard
+        })
+        .on('data:loaded', function() { 
+             console.log("Kano Wards with NUMPOINTS GeoJSON loaded.");
+             if (geojsonKanoWards.getLayers().length > 0) { 
+                 // mymap.fitBounds(geojsonKanoWards.getBounds()); // Uncomment if you want map to fit this layer on load
+                 console.log("Kano Wards features loaded:", geojsonKanoWards.getLayers().length);
+             } else {
+                 console.warn("Kano Wards GeoJSON loaded, but no features were added to the layer.");
+             }
+         })
+        .on('data:error', function(e) {
+            console.error("Error loading kano_wards_with_numpoints.geojson:", e);
+        })
+        .addTo(mymap);
+
+		function getColorForWards(h){
+            const count = Number(h); 
+            if (isNaN(count)) return '#CCCCCC'; // Light grey for invalid/missing NUMPOINTS
+
+            return count >= 15 ? '#800026' :  // 15+
+                   count >= 10 ? '#BD0026' :  // 10-14
+                   count >= 5  ? '#E31A1C' :  // 5-9
+                   count >= 1  ? '#FC4E2A' :  // 1-4
+                                 '#FFEDA0';   // 0 facilities
+		}
+
+		function styleWards(feature){
+            var numPointsValue = feature.properties.NUMPOINTS;
+            if (feature.properties.NUMPOINTS === undefined) {
+                 console.warn("Ward (FID:", feature.properties.FID, ", Name:", feature.properties.wardname, ") missing NUMPOINTS property. Defaulting color.");
+            }
+			return{
+				fillColor: getColorForWards(numPointsValue),
+				weight: 1.5, // Slightly thinner border for wards
+				opacity: 1,
+				color: 'white', 
+				dashArray: '3',
+				fillOpacity: 0.75 // Slightly more opaque
+			};
+		}
+
+		var wardInfo = L.control(); 
+		wardInfo.onAdd = function (map){ this._div = L.DomUtil.create('div', 'info ward-info'); this.update(); return this._div; };
+		wardInfo.update = function (props){
+            var wardName = props && props.wardname ? props.wardname : (props && props.ward ? props.ward : "N/A");
+            var numFacilitiesText = (props && props.NUMPOINTS !== undefined && !isNaN(Number(props.NUMPOINTS))) ?
+                                    '<br/>' + Number(props.NUMPOINTS) + ' Health Facilities' :
+                                    (props ? '<br/>Facility count: N/A' : '');
+            this._div.innerHTML = '<h4>Kano Ward</h4>' + (props ? '<b>' + wardName + '</b>' + numFacilitiesText : 'Hover over a Ward');
+		};
+		wardInfo.addTo(mymap);
+
+		function highlightFeatureWard(e){
+			var layer = e.target;
+			wardInfo.update(layer.feature.properties);
+			layer.setStyle({ weight: 4, color: '#333', dashArray: '', fillOpacity: 0.85 }); // Darker highlight
+			if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                layer.bringToFront();
+            }
+		}
+		function resetHighlightWard(e){
+			geojsonKanoWards.resetStyle(e.target); 
+			wardInfo.update();
+		}
+		function zoomToFeatureWard(e){ mymap.fitBounds(e.target.getBounds()); }
+		function onEachFeatureWard(feature, layer){ 
+            layer.on({
+				mouseover: highlightFeatureWard,
+				mouseout: resetHighlightWard,
+				click: zoomToFeatureWard
+			});
+        }
+
+		var legendWards = L.control({position: 'bottomright'}); 
+		legendWards.onAdd = function(map){
+			var div = L.DomUtil.create('div', 'info legend legend-wards'),
+			    grades = [0, 1, 5, 10, 15], 
+			    labels = [];
+            div.innerHTML += "<h5>Ward Facility Count</h5>"; 
+            for (var i = 0; i < grades.length; i++) {
+                var from = grades[i]; var to = grades[i + 1]; var color = getColorForWards(from);
+                div.innerHTML += '<i style="background:' + color + '"></i> ' + from + (to ? '–' + (to - 1) : '+') + '<br>';
+            }
+            // div.innerHTML += '<i style="background:#CCCCCC"></i> N/A<br>'; // For missing data
+            return div;
+	    };
+	    legendWards.addTo(mymap);
+	    control_Layers.addOverlay(geojsonKanoWards, "Kano Wards");
+		
+		// --- HEALTH FACILITIES ---
+		var kanoHealthFacilitiesLayer = L.geoJson.ajax('data/kano_health_facilities.geojson', {
+		    pointToLayer: styleHealthFacilities
+		}).addTo(mymap);
+
+		kanoHealthFacilitiesLayer.on('data:loaded', function () {
+            console.log("Kano Health Facilities GeoJSON loaded:", kanoHealthFacilitiesLayer.getLayers().length, "features.");
+            kanoHealthFacilitiesLayer.bringToFront();
+		})
+        .on('data:error', function(e) {
+            console.error("Error loading kano_health_facilities.geojson:", e);
+        });
+
+        function styleHealthFacilities(json, latlng) {
+            var att = json.properties;
+            var markerColor;
+            var radius;
+            var fillOpacity = 0.8; 
+            var borderColor = '#555555'; 
+            var borderWidth = 1;
+
+            var facilityLevel = att.facility_level ? String(att.facility_level).trim() : "Unknown";
+
+            switch (facilityLevel) {
+                case 'Tertiary': markerColor = '#31a354'; radius = 10; break;
+                case 'Secondary': markerColor = '#feb24c'; radius = 7; break;
+                case 'Primary': markerColor = '#de2d26'; radius = 5; break;
+                default: markerColor = '#636363'; radius = 4; borderColor = '#333333'; break;
+            }
+
+            return L.circleMarker(latlng, {
+                radius: radius, fillColor: markerColor, color: borderColor,      
+                weight: borderWidth, opacity: 1, fillOpacity: fillOpacity 
+            }).bindTooltip("<b>Name:</b> " + (att.facility_name || "N/A") +
+                           "<br><b>Level:</b> " + (att.facility_level || facilityLevel) + // Use original if available, else normalized
+                           (att.facility_level_option ? "<br><b>Option:</b> " + att.facility_level_option : "") +
+                           (att.ownership_type ? "<br><b>Owner:</b> " + att.ownership_type : ""));
+        }
+
+		control_Layers.addOverlay(kanoHealthFacilitiesLayer, "Health Facilities");
+		
+		var legendHealthFacilities = L.control({ position: 'bottomleft' });
+		legendHealthFacilities.onAdd = function (map) {
+		    var div = L.DomUtil.create('div', 'info legend legend-health');
+		    
+		    // Define levels and their corresponding colors EXACTLY as used in styleHealthFacilities
+		    var facilityStyles = [
+		        { level: 'Tertiary', color: '#31a354' },
+		        { level: 'Secondary', color: '#feb24c' },
+		        { level: 'Primary', color: '#de2d26' },
+		        { level: 'Other/Unknown', color: '#636363' } // Matches the default case
+		    ];
+
+		    div.innerHTML += "<h5>Health Facility Levels</h5>";
+		    for (var i = 0; i < facilityStyles.length; i++) {
+		        div.innerHTML +=
+		            '<i style="background:' + facilityStyles[i].color + '"></i> ' +
+		            facilityStyles[i].level + '<br>';
+		    }
+		    return div;
+		};
+		legendHealthFacilities.addTo(mymap);
+	
+
+        // Optional: Add attribution control if you removed it from map init and want it back
+        // L.control.attribution({ position: 'bottomright' }).addTo(mymap);
+
+    </script>
+</body>
+</html>
