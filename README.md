@@ -4,6 +4,8 @@
 
 This project displays an interactive web map showcasing health facilities within the administrative wards of Kano, Nigeria. The map allows users to visualize the distribution of health facilities and see the number of facilities per ward. Wards are thematically colored based on the count of facilities they contain, and individual health facilities are styled by their operational level (Primary, Secondary, Tertiary).
 
+**Live Demo:** https://adegbehingbegodwin.github.io/Health-Facilities-in-Kano/
+
 ## Features
 
 *   **Interactive Map:** Built with Leaflet.js.
